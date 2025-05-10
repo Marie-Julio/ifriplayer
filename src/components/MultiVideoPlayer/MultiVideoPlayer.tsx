@@ -2,13 +2,36 @@ import './styles.css';
 import React, { useState, useRef, useEffect, useCallback, useMemo, Suspense } from 'react';
 import {
   Play, Pause, Volume2, VolumeX, SkipBack, SkipForward, FastForward, Rewind, 
-  ChevronLeft, ChevronRight, Grid, Download, Settings,
-  Maximize, Minimize, ChevronsUp, ChevronsDown, RotateCw, BookmarkPlus,
+  ChevronRight, Download, Settings, Maximize, Minimize, RotateCw, BookmarkPlus,
   ThumbsUp, ThumbsDown, Share, List, MoreVertical, Subtitles, Headphones, Camera, RotateCcw,
   Link2, Link2Off, Lock, Unlock
 } from 'lucide-react';
 
 const PRELOAD_COUNT = 3;
+
+interface Video {
+  id: string;
+  title: string;
+  file_path: string;
+  thumbnail?: string;
+  url?: string;
+  likes?: number;
+  dislikes?: number;
+  downloadable?: boolean;
+}
+
+interface TimeMarker {
+  time: number;
+  formattedTime: string;
+  label: string;
+  id: number;
+}
+
+interface MultiVideoPlayerProps {
+  videos: Video[];
+  initialVideoIndex?: number;
+  syncByDefault?: boolean;
+}
 
 const LoadingIndicator = () => (
   <div className="flex items-center justify-center h-full w-full bg-black">
@@ -28,7 +51,11 @@ const LoadingIndicator = () => (
   </div>
 );
 
-const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false }) => {
+const MultiVideoPlayer: React.FC<MultiVideoPlayerProps> = ({ 
+  videos, 
+  initialVideoIndex = 0, 
+  syncByDefault = false 
+}) => {
   const apiUrl = import.meta.env.VITE_API_URI_BASE || '';
   const [currentVideoIndex, setCurrentVideoIndex] = useState(initialVideoIndex);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -37,17 +64,16 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.8);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [syncMode, setSyncMode] = useState(false);
   const [showThumbnails, setShowThumbnails] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadedVideos, setLoadedVideos] = useState([]);
+  const [loadedVideos, setLoadedVideos] = useState<number[]>([]);
   const [buffering, setBuffering] = useState(false);
-  const [timeMarkers, setTimeMarkers] = useState([]);
+  const [timeMarkers, setTimeMarkers] = useState<TimeMarker[]>([]);
   const [showChapters, setShowChapters] = useState(false);
   const [quality, setQuality] = useState('auto');
-  const [editingMarkerId, setEditingMarkerId] = useState(null);
+  const [editingMarkerId, setEditingMarkerId] = useState<number | null>(null);
   const [markerEditText, setMarkerEditText] = useState('');
   const [isHovering, setIsHovering] = useState(false);
   const [isVolumeSliderVisible, setIsVolumeSliderVisible] = useState(false);
@@ -68,13 +94,16 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
   const [showShareOptions, setShowShareOptions] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [locked, setLocked] = useState(false);
 
-  const containerRef = useRef(null);
-  const videoRefs = useRef(videos.map(() => React.createRef()));
-  const progressBarRef = useRef(null);
-  const playerRef = useRef(null);
-  const volumeControlTimeout = useRef(null);
-  const bigPlayPauseTimeout = useRef(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>(Array(videos.length).fill(null));
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<HTMLDivElement>(null);
+  const volumeControlTimeout = useRef<NodeJS.Timeout | null>(null);
+  const bigPlayPauseTimeout = useRef<NodeJS.Timeout | null>(null);
+  const inactivityTimeout = useRef<NodeJS.Timeout | null>(null);
   
   const currentVideo = videos[currentVideoIndex];
 
@@ -107,7 +136,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
   }, [currentVideoIndex, apiUrl, currentVideo?.id]);
 
   const videosToPreload = useMemo(() => {
-    const result = [];
+    const result: number[] = [];
     const totalVideos = Math.min(videos.length, PRELOAD_COUNT);
 
     for (let i = 0; i < totalVideos; i++) {
@@ -118,7 +147,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
     return result;
   }, [currentVideoIndex, videos.length]);
 
-  const formatTime = useCallback((time) => {
+  const formatTime = useCallback((time: number) => {
     if (isNaN(time)) return '0:00';
     
     const hours = Math.floor(time / 3600);
@@ -131,7 +160,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }, []);
 
-  const handleVideoLoaded = useCallback((index) => {
+  const handleVideoLoaded = useCallback((index: number) => {
     setLoadedVideos(prev => {
       if (!prev.includes(index)) {
         return [...prev, index];
@@ -144,10 +173,10 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
     }
   }, [currentVideoIndex]);
 
-  const syncAllVideos = useCallback((time) => {
+  const syncAllVideos = useCallback((time: number) => {
     videoRefs.current.forEach(ref => {
-      if (ref.current && Math.abs(ref.current.currentTime - time) > 0.5) {
-        ref.current.currentTime = time;
+      if (ref && Math.abs(ref.currentTime - time) > 0.5) {
+        ref.currentTime = time;
       }
     });
   }, []);
@@ -157,8 +186,8 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
 
     const promises = loadedVideos.map(index => {
       const ref = videoRefs.current[index];
-      if (ref.current) {
-        return ref.current.play().catch(e => {
+      if (ref) {
+        return ref.play().catch((e: Error) => {
           console.log("Lecture automatique bloquée", e);
           return Promise.resolve();
         });
@@ -180,8 +209,8 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
 
   const handlePause = useCallback(() => {
     videoRefs.current.forEach(ref => {
-      if (ref.current) {
-        ref.current.pause();
+      if (ref) {
+        ref.pause();
       }
     });
     setIsPlaying(false);
@@ -195,7 +224,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
   }, []);
 
   const handleTimeUpdate = useCallback(() => {
-    const video = videoRefs.current[currentVideoIndex].current;
+    const video = videoRefs.current[currentVideoIndex];
     if (!video) return;
 
     const time = video.currentTime;
@@ -212,27 +241,14 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
   }, [currentVideoIndex, duration, syncEnabled, syncAllVideos]);
 
   const handleLoadedMetadata = useCallback(() => {
-    const video = videoRefs.current[currentVideoIndex].current;
+    const video = videoRefs.current[currentVideoIndex];
     if (!video) return;
 
     setDuration(video.duration);
     handleVideoLoaded(currentVideoIndex);
   }, [currentVideoIndex, handleVideoLoaded]);
 
-  const handleSeek = useCallback((e) => {
-    const seekTime = parseFloat(e.target.value);
-
-    loadedVideos.forEach(index => {
-      const ref = videoRefs.current[index];
-      if (ref.current) {
-        ref.current.currentTime = seekTime;
-      }
-    });
-
-    setCurrentTime(seekTime);
-  }, [loadedVideos]);
-
-  const changeVideo = useCallback((index) => {
+  const changeVideo = useCallback((index: number) => {
     if (index === currentVideoIndex) return;
 
     const wasPlaying = isPlaying;
@@ -241,7 +257,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
 
     if (loadedVideos.includes(index)) {
       setCurrentVideoIndex(index);
-      setCurrentTime(syncEnabled ? (videoRefs.current[index].current?.currentTime || 0) : 0);
+      setCurrentTime(syncEnabled ? (videoRefs.current[index]?.currentTime || 0) : 0);
       setIsLoading(false);
       setLikes(videos[index]?.likes || 0);
       setDislikes(videos[index]?.dislikes || 0);
@@ -275,7 +291,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
   }, []);
 
   const addTimeMarker = useCallback(() => {
-    const newMarker = {
+    const newMarker: TimeMarker = {
       time: currentTime,
       formattedTime: formatTime(currentTime),
       label: `Marqueur ${timeMarkers.length + 1}`,
@@ -285,22 +301,22 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
     setTimeMarkers(prev => [...prev, newMarker]);
   }, [currentTime, formatTime, timeMarkers.length]);
 
-  const goToTimeMarker = useCallback((time) => {
+  const goToTimeMarker = useCallback((time: number) => {
     loadedVideos.forEach(index => {
       const ref = videoRefs.current[index];
-      if (ref.current) {
-        ref.current.currentTime = time;
+      if (ref) {
+        ref.currentTime = time;
       }
     });
 
     setCurrentTime(time);
   }, [loadedVideos]);
 
-  const deleteTimeMarker = useCallback((id) => {
+  const deleteTimeMarker = useCallback((id: number) => {
     setTimeMarkers(prev => prev.filter(marker => marker.id !== id));
   }, []);
 
-  const startEditingMarker = useCallback((marker) => {
+  const startEditingMarker = useCallback((marker: TimeMarker) => {
     setEditingMarkerId(marker.id);
     setMarkerEditText(marker.label);
   }, []);
@@ -366,7 +382,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
   const handleDownload = useCallback(() => {
     if (!currentVideo?.downloadable) return;
     
-    const video = videoRefs.current[currentVideoIndex].current;
+    const video = videoRefs.current[currentVideoIndex];
     if (!video) return;
     
     const a = document.createElement('a');
@@ -402,7 +418,10 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
       const response = await fetch(`${apiUrl}/api/videos/${currentVideo.id}/enhanced-audio`);
       if (response.ok) {
         const enhancedUrl = await response.json();
-        videoRefs.current[currentVideoIndex].current.src = enhancedUrl;
+        const video = videoRefs.current[currentVideoIndex];
+        if (video) {
+          video.src = enhancedUrl;
+        }
         setAudioEnhanced(true);
       } else {
         setAudioEnhancementAvailable(false);
@@ -414,7 +433,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
   }, [audioEnhancementAvailable, currentVideo?.id, currentVideoIndex, apiUrl]);
 
   const handleScreenshot = useCallback(async () => {
-    const video = videoRefs.current[currentVideoIndex].current;
+    const video = videoRefs.current[currentVideoIndex];
     if (!video) return;
     
     try {
@@ -423,9 +442,12 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       
+      if (!ctx) throw new Error('Could not get canvas context');
+      
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
       canvas.toBlob((blob) => {
+        if (!blob) return;
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -443,6 +465,8 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
       canvas.height = video.videoHeight || 360;
       const ctx = canvas.getContext('2d');
       
+      if (!ctx) return;
+      
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
@@ -452,6 +476,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
       ctx.fillText('Capture non disponible pour cette vidéo', canvas.width / 2, canvas.height / 2);
       
       canvas.toBlob((blob) => {
+        if (!blob) return;
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -487,22 +512,22 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
     });
   }, [shareUrl]);
 
-  const rotateVideo = useCallback((degrees) => {
+  const rotateVideo = useCallback((degrees: number) => {
     setRotation(prev => (prev + degrees) % 360);
   }, []);
 
   const videoRotationStyle = useMemo(() => {
-    return {
+    return rotation !== 0 ? {
       transform: `rotate(${rotation}deg)`,
       transformOrigin: 'center',
       transition: 'transform 0.3s ease',
-    };
+    } : {};
   }, [rotation]);
 
-  const [previewTime, setPreviewTime] = useState(null);
+  const [previewTime, setPreviewTime] = useState<number | null>(null);
   const [previewPosition, setPreviewPosition] = useState(0);
   
-  const handleProgressBarHover = useCallback((e) => {
+  const handleProgressBarHover = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const pos = (e.clientX - rect.left) / rect.width;
     const time = pos * duration;
@@ -510,11 +535,23 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
     setPreviewPosition(pos * 100);
   }, [duration]);
 
+  const resetInactivityTimer = useCallback(() => {
+    setControlsVisible(true);
+    if (inactivityTimeout.current) {
+      clearTimeout(inactivityTimeout.current);
+    }
+    inactivityTimeout.current = setTimeout(() => {
+      if (!locked) {
+        setControlsVisible(false);
+      }
+    }, 5000);
+  }, [locked]);
+
   useEffect(() => {
     const initializePreload = async () => {
       for (const index of videosToPreload) {
         if (!loadedVideos.includes(index)) {
-          const video = videoRefs.current[index].current;
+          const video = videoRefs.current[index];
           if (video) {
             video.preload = "metadata";
             if (index !== currentVideoIndex) {
@@ -529,7 +566,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
   }, [videosToPreload, loadedVideos, currentVideoIndex]);
 
   useEffect(() => {
-    const video = videoRefs.current[currentVideoIndex].current;
+    const video = videoRefs.current[currentVideoIndex];
     if (!video) return;
 
     const events = [
@@ -553,7 +590,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
 
   useEffect(() => {
     if (!loadedVideos.includes(currentVideoIndex)) {
-      const video = videoRefs.current[currentVideoIndex].current;
+      const video = videoRefs.current[currentVideoIndex];
       if (video) {
         video.load();
       }
@@ -563,8 +600,8 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
   }, [currentVideoIndex, loadedVideos]);
 
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (!containerRef.current || !containerRef.current.contains(document.activeElement)) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!containerRef.current || !containerRef.current.contains(document.activeElement as Node)) return;
 
       switch (e.key) {
         case ' ':
@@ -611,24 +648,6 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying, handlePlay, handlePause, duration, currentTime, syncAllVideos, toggleFullscreen, isMuted, subtitlesAvailable, toggleSubtitles, audioEnhancementAvailable, enhanceAudio, syncEnabled]);
 
-  const [controlsVisible, setControlsVisible] = useState(true);
-  const [locked, setLocked] = useState(false);
-  const inactivityTimeout = useRef(null);
-
-  // Ajoutez cette fonction pour gérer l'inactivité
-  const resetInactivityTimer = useCallback(() => {
-    setControlsVisible(true);
-    if (inactivityTimeout.current) {
-      clearTimeout(inactivityTimeout.current);
-    }
-    inactivityTimeout.current = setTimeout(() => {
-      if (!locked) {
-        setControlsVisible(false);
-      }
-    }, 5000);
-  }, [locked]);
-
-  // Ajoutez cet effet pour initialiser et nettoyer le timer
   useEffect(() => {
     resetInactivityTimer();
     return () => {
@@ -656,14 +675,15 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
               {videos.map((video, index) => (
                 <video
                   key={index}
-                  ref={videoRefs.current[index]}
+                  ref={el => {
+                    if (el) videoRefs.current[index] = el;
+                  }}
                   src={`${video.file_path}`}
                   className={`w-full aspect-video bg-black ${index === currentVideoIndex ? 'block' : 'hidden'}`}
                   style={index === currentVideoIndex ? videoRotationStyle : {}}
                   playsInline
                   preload={videosToPreload.includes(index) ? "auto" : "none"}
                   muted={index !== currentVideoIndex || isMuted}
-                  playbackRate={playbackRate}
                   onLoadedMetadata={() => {
                     if (index === currentVideoIndex) {
                       handleLoadedMetadata();
@@ -748,7 +768,9 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
                 >
                   <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-600 group-hover:h-3 transition-all">
                     <div className="absolute top-0 left-0 h-full bg-gray-400" style={{ width: '30%' }}></div>
-                    <div ref={progressBarRef} className="absolute top-0 left-0 h-full bg-red-600" style={{ width: `${(currentTime / duration) * 100}%` }}></div>
+                    {progressBarRef.current && (
+                      <div ref={progressBarRef} className="absolute top-0 left-0 h-full bg-red-600" style={{ width: `${(currentTime / duration) * 100}%` }}></div>
+                    )}
                     
                     {previewTime !== null && (
                       <div 
@@ -829,7 +851,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
                             onClick={() => {
                               const newMuted = !isMuted;
                               videoRefs.current.forEach(ref => {
-                                if (ref.current) ref.current.muted = newMuted;
+                                if (ref) ref.muted = newMuted;
                               });
                               setIsMuted(newMuted);
                             }}
@@ -854,7 +876,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
                               onChange={(e) => {
                                 const vol = parseFloat(e.target.value);
                                 videoRefs.current.forEach(ref => {
-                                  if (ref.current) ref.current.volume = vol;
+                                  if (ref) ref.volume = vol;
                                 });
                                 setVolume(vol);
                                 setIsMuted(vol === 0);
@@ -863,7 +885,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
                               aria-label="Volume"
                               style={{ 
                                 WebkitAppearance: 'slider-vertical',
-                                writingMode: 'bt-lr',
+                                writingMode: 'vertical-lr' as const,
                                 transform: 'rotate(0deg)'
                               }}
                             />
@@ -928,7 +950,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
                                         onClick={() => {
                                           setPlaybackRate(speed);
                                           videoRefs.current.forEach(ref => {
-                                            if (ref.current) ref.current.playbackRate = speed;
+                                            if (ref) ref.playbackRate = speed;
                                           });
                                           setShowSpeedOptions(false);
                                         }}
@@ -1152,7 +1174,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
                     className={`flex-shrink-0 w-32 h-20 rounded overflow-hidden cursor-pointer relative ${index === currentVideoIndex ? 'ring-2 ring-blue-500' : 'opacity-70 hover:opacity-100'}`}
                   >
                     <img 
-                      src={video.thumbnail || `https://img.youtube.com/vi/${getYouTubeId(video.url)}/mqdefault.jpg`}
+                      src={video.thumbnail || `https://img.youtube.com/vi/${getYouTubeId(video.url || '')}/mqdefault.jpg`}
                       alt={video.title}
                       className="w-full h-full object-cover"
                     />
@@ -1160,7 +1182,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
                       {video.title}
                     </div>
                     <div className="absolute top-1 left-1 bg-black/70 rounded px-1 text-xs">
-                      {formatTime(videoRefs.current[index].current?.currentTime || 0)}
+                      {formatTime(videoRefs.current[index]?.currentTime || 0)}
                     </div>
                   </div>
                 ))}
@@ -1280,7 +1302,7 @@ const MultiVideoPlayer = ({ videos, initialVideoIndex = 0, syncByDefault = false
   );
 };
 
-function getYouTubeId(url) {
+function getYouTubeId(url: string): string | null {
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
   const match = url.match(regExp);
   return (match && match[2].length === 11) ? match[2] : null;
