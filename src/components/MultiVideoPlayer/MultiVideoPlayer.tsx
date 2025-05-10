@@ -4,7 +4,7 @@ import {
   Play, Pause, Volume2, VolumeX, SkipBack, SkipForward, FastForward, Rewind, 
   ChevronRight, Download, Settings, Maximize, Minimize, RotateCw, BookmarkPlus,
   ThumbsUp, ThumbsDown, Share, List, MoreVertical, Subtitles, Headphones, Camera, RotateCcw,
-  Link2, Link2Off, Lock, Unlock
+  Link2, Link2Off
 } from 'lucide-react';
 
 const PRELOAD_COUNT = 3;
@@ -95,7 +95,7 @@ const MultiVideoPlayer: React.FC<MultiVideoPlayerProps> = ({
   const [shareUrl, setShareUrl] = useState('');
   const [shareCopied, setShareCopied] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const [locked, setLocked] = useState(false);
+  const [locked] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>(Array(videos.length).fill(null));
@@ -605,10 +605,6 @@ const MultiVideoPlayer: React.FC<MultiVideoPlayerProps> = ({
 
       switch (e.key) {
         case ' ':
-        case 'k':
-          e.preventDefault();
-          isPlaying ? handlePause() : handlePlay();
-          break;
         case 'ArrowRight':
         case 'l':
           e.preventDefault();
@@ -725,34 +721,7 @@ const MultiVideoPlayer: React.FC<MultiVideoPlayerProps> = ({
               className={`absolute inset-0 flex flex-col justify-between z-10 transition-opacity duration-300 ${
                 (isHovering || !isPlaying || !controlsVisible) ? 'opacity-100' : 'opacity-0'
               }`}
-              onClick={(e) => {
-                e.target === e.currentTarget && (isPlaying ? handlePause() : handlePlay());
-                resetInactivityTimer();
-              }}
             >
-              <div className="bg-gradient-to-b from-black/70 to-transparent p-2 flex items-center justify-between">
-                {locked && (
-                  <div className="text-sm text-white/70 ml-2">
-                    Lecteur verrouillé - Cliquez pour déverrouiller
-                  </div>
-                )}
-                <button
-                  onClick={() => {
-                    setLocked(!locked);
-                    if (!locked) {
-                      setControlsVisible(false);
-                    } else {
-                      setControlsVisible(true);
-                      resetInactivityTimer();
-                    }
-                  }}
-                  className={`hover:bg-gray-800 rounded-full p-2 ${locked ? 'bg-red-600 text-white ' : 'bg-gray-600 text-white '}`}
-                  aria-label={locked ? "Déverrouiller" : "Verrouiller"}
-                  title={locked ? "Déverrouiller" : "Verrouiller"}
-                >
-                  {locked ? <Lock size={20} /> : <Unlock size={20} />}
-                </button>
-              </div>
 
               <div className={`bg-gradient-to-t from-black/70 to-transparent ${locked ? 'hidden' : 'block'}`}>
                 <div 
