@@ -4,12 +4,13 @@
   "description": "Un lecteur vidéo multi-fonctionnel pour React",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "module": "dist/index.esm.js",
   "files": [
     "dist"
   ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc",
+    "build": "vite build && tsc",
     "prepublishOnly": "npm run build",
     "lint": "eslint .",
     "preview": "vite preview"
