@@ -1,5 +1,6 @@
 import './styles.css';
-import React, { useState, useRef, useEffect, useCallback, useMemo, Suspense } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, Suspense } from 'react';
+import * as React from 'react';
 import {
   Play, Pause, Volume2, VolumeX, SkipBack, SkipForward, FastForward, Rewind, 
   ChevronRight, Download, Settings, Maximize, Minimize, RotateCw, BookmarkPlus,
