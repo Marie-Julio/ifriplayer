@@ -1,5 +1,5 @@
 {
-  "name": "multi-video-player",
+  "name": "ifriplayer",
   "version": "1.0.0",
   "description": "Un lecteur vidéo multi-fonctionnel pour React",
   "main": "dist/index.js",

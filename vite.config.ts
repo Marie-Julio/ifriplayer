@@ -7,7 +7,7 @@ export default defineConfig({
     lib: {
       entry: path.resolve(__dirname, 'src/components/MultiVideoPlayer/MultiVideoPlayer.tsx'),
       name: 'MultiVideoPlayer',
-      fileName: (format) => `multi-video-player.${format}.js`
+      fileName: (format) => `ifriplayer.${format}.js`
     },
     rollupOptions: {
       external: ['react', 'react-dom'],
