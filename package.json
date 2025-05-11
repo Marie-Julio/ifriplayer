@@ -1,17 +1,16 @@
 {
-  "name": "ifriplayer",
-  "private": true,
+  "name": "multi-video-player",
   "version": "1.0.0",
-  "description": "Lecteur vidéo universel accessible",
-  "main": "./dist/multi-video-player.umd.js",
-  "module": "./dist/multi-video-player.es.js",
-  "types": "./dist/MultiVideoPlayer.d.ts",
+  "description": "Un lecteur vidéo multi-fonctionnel pour React",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -43,5 +42,12 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.30.1",
     "vite": "^6.3.5"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Marie-Julio/ifriplayer.git"
+  },
+  "keywords": ["react", "video", "player"],
+  "author": "Marie-Julio",
+  "license": "MIT"
 }
