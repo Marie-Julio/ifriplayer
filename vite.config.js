@@ -1,14 +1,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import path from 'node:path';
+import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
   build: {
     lib: {
-      entry: path.resolve(__dirname, 'src/components/MultiVideoPlayer/index.ts'),
-      name: 'MultiVideoPlayer',
-      fileName: (format) => `index.${format}.js`
+      entry: path.resolve(__dirname, 'src/components/VideoPlayer.jsx'),
+      name: 'VideoPlayer',
+      fileName: (format) => `ifriplayer.${format}.js`
     },
     rollupOptions: {
       external: ['react', 'react-dom'],
@@ -18,11 +18,6 @@ export default defineConfig({
           'react-dom': 'ReactDOM'
         }
       }
-    }
-  },
-  css: {
-    modules: {
-      localsConvention: 'camelCase'
     }
   }
 });
