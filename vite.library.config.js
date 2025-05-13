@@ -8,7 +8,8 @@ export default defineConfig({
     lib: {
       entry: path.resolve(__dirname, 'src/components/VideoPlayer.jsx'),
       name: 'VideoPlayer',
-      fileName: (format) => `ifriplayer.${format}.js`
+      fileName: (format) => `ifriplayer.${format}.js`,
+      formats: ['es', 'umd']
     },
     rollupOptions: {
       external: ['react', 'react-dom'],
